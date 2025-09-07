@@ -11,6 +11,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Make secret available as env for conditional checks
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      FOLDER_ID: ""
+      SHARE_EMAIL: ""
+      TITLE: "Majin Slides"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,12 +60,10 @@ jobs:
 
       - name: Upload PPTX to Google Slides (convert)
         id: upload
-        if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         env:
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GDRIVE_FOLDER_ID: ""
-          GDRIVE_SHARE_EMAIL: ""
-          TITLE: "Majin Slides"
+          GDRIVE_FOLDER_ID: ${{ env.FOLDER_ID }}
+          GDRIVE_SHARE_EMAIL: ${{ env.SHARE_EMAIL }}
         run: |
           T=${TITLE:-"Majin Slides"}
           node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$T"
