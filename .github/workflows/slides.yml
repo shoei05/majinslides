@@ -29,10 +29,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      MD_PATH: ${{ inputs.md_path || '改良版 まじん式プロンプト.md' }}
-      TITLE: ${{ inputs.title || 'Majin Slides' }}
-      FOLDER_ID: ${{ inputs.folder_id }}
-      SHARE_EMAIL: ${{ inputs.share_email }}
+      # workflow_dispatch のときのみ値が入り、push では空文字になる
+      MD_PATH: ${{ github.event.inputs.md_path }}
+      TITLE: ${{ github.event.inputs.title }}
+      FOLDER_ID: ${{ github.event.inputs.folder_id }}
+      SHARE_EMAIL: ${{ github.event.inputs.share_email }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,15 +57,18 @@ jobs:
       - name: Render slides via Marp
         run: |
           set -euxo pipefail
-          echo "Using MD_PATH=$MD_PATH"
-          test -f "$MD_PATH" || (echo "Markdown not found: $MD_PATH"; ls -la; exit 1)
+          MD=${MD_PATH:-}
+          if [ -z "$MD" ]; then MD="slides/sample.md"; fi
+          T=${TITLE:-"Majin Slides"}
+          echo "Using MD_PATH=$MD\nUsing TITLE=$T"
+          test -f "$MD" || (echo "Markdown not found: $MD"; git ls-files; exit 1)
           ls -la slides/themes || true
           mkdir -p dist
           npx marp --version
           # PDF / PPTX / HTML
-          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --pdf --output dist/slides.pdf
-          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --pptx --output dist/slides.pptx
-          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --html --output dist/slides.html
+          npx marp "$MD" --theme-set slides/themes/majin.css --allow-local-files --pdf --output dist/slides.pdf
+          npx marp "$MD" --theme-set slides/themes/majin.css --allow-local-files --pptx --output dist/slides.pptx
+          npx marp "$MD" --theme-set slides/themes/majin.css --allow-local-files --html --output dist/slides.html
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -80,7 +84,8 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ env.FOLDER_ID }}
           GDRIVE_SHARE_EMAIL: ${{ env.SHARE_EMAIL }}
         run: |
-          node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$TITLE"
+          T=${TITLE:-"Majin Slides"}
+          node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$T"
 
       - name: Summary
         run: |
