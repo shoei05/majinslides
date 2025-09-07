@@ -142,7 +142,7 @@
           token: $('#gh-token').value.trim(),
           folderId: $('#gdrive-folder').value.trim(),
           shareEmail: $('#share-email').value.trim(),
-          googleClientId: ($('#gcp-client-id')?.value || '').trim(),
+          googleClientId: (function(){ const el = $('#gcp-client-id'); return el ? (el.value || '').trim() : ''; })(),
         });
         try { dlg.close(); } catch { dlg.removeAttribute('open'); }
       }
@@ -181,10 +181,10 @@
         const sinceIso = new Date(startedAtMs - 5000).toISOString();
         while (Date.now() < deadline) {
           const runs = await fetchJson(`${api}/repos/${cfg.owner}/${cfg.repo}/actions/runs?per_page=10`, headers);
-          const ok = runs.workflow_runs?.find(r => r.path === `.github/workflows/${cfg.workflow}` && r.status === 'completed' && r.conclusion === 'success' && r.run_started_at >= sinceIso);
+          const ok = (runs.workflow_runs || []).find(r => r.path === `.github/workflows/${cfg.workflow}` && r.status === 'completed' && r.conclusion === 'success' && r.run_started_at >= sinceIso);
           if (ok) {
             const arts = await fetchJson(`${api}/repos/${cfg.owner}/${cfg.repo}/actions/runs/${ok.id}/artifacts?per_page=10`, headers);
-            const a = arts.artifacts?.find(x => x.name === 'majin-slides');
+            const a = (arts.artifacts || []).find(x => x.name === 'majin-slides');
             if (a) {
               const zipRes = await fetch(a.archive_download_url, { headers });
               const zipBlob = await zipRes.blob();
@@ -262,21 +262,20 @@
       }
 
       function attachHandlers() {
-        $('#btn-new')?.addEventListener('click', () => { if (!editor) return; editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); });
-        $('#btn-open')?.addEventListener('click', () => $('#file-open').click());
-        $('#file-open')?.addEventListener('change', async (e) => { const f = e.target.files?.[0]; if (!f) return; const text = await f.text(); editor.value = text; editor.dispatchEvent(new Event('input')); });
-        $('#btn-save-md')?.addEventListener('click', () => { const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.md'; a.click(); URL.revokeObjectURL(a.href); });
-        $('#btn-download-html')?.addEventListener('click', () => { const { html, css } = marp.render(editor.value, { themeSet }); const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`; const blob = new Blob([doc], { type: 'text/html;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.html'; a.click(); URL.revokeObjectURL(a.href); });
-        $('#btn-settings')?.addEventListener('click', openSettings);
-        $('#btn-settings-cancel')?.addEventListener('click', () => { try { dlg.close(); } catch { dlg.removeAttribute('open'); } });
-        $('#btn-settings-save')?.addEventListener('click', saveSettings);
-        $('#btn-dispatch')?.addEventListener('click', () => dispatchWorkflow());
-        $('#btn-google-auth')?.addEventListener('click', () => ensureGoogleToken(true));
-        $('#btn-direct-gslides')?.addEventListener('click', () => dispatchAndDirectConvert());
+        const bNew = $('#btn-new'); if (bNew) bNew.addEventListener('click', () => { if (!editor) return; editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); });
+        const bOpen = $('#btn-open'); if (bOpen) bOpen.addEventListener('click', () => { const fo = $('#file-open'); if (fo) fo.click(); });
+        const fOpen = $('#file-open'); if (fOpen) fOpen.addEventListener('change', async (e) => { const f = e.target && e.target.files ? e.target.files[0] : null; if (!f) return; const text = await f.text(); editor.value = text; editor.dispatchEvent(new Event('input')); });
+        const bSave = $('#btn-save-md'); if (bSave) bSave.addEventListener('click', () => { const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.md'; a.click(); URL.revokeObjectURL(a.href); });
+        const bHtml = $('#btn-download-html'); if (bHtml) bHtml.addEventListener('click', () => { const { html, css } = marp.render(editor.value, { themeSet }); const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`; const blob = new Blob([doc], { type: 'text/html;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.html'; a.click(); URL.revokeObjectURL(a.href); });
+        const bSet = $('#btn-settings'); if (bSet) bSet.addEventListener('click', openSettings);
+        const bSetCancel = $('#btn-settings-cancel'); if (bSetCancel) bSetCancel.addEventListener('click', () => { try { dlg.close(); } catch (e) { dlg.removeAttribute('open'); } });
+        const bSetSave = $('#btn-settings-save'); if (bSetSave) bSetSave.addEventListener('click', saveSettings);
+        const bDispatch = $('#btn-dispatch'); if (bDispatch) bDispatch.addEventListener('click', () => dispatchWorkflow());
+        const bAuth = $('#btn-google-auth'); if (bAuth) bAuth.addEventListener('click', () => ensureGoogleToken(true));
+        const bDirect = $('#btn-direct-gslides'); if (bDirect) bDirect.addEventListener('click', () => dispatchAndDirectConvert());
       }
 
       window.addEventListener('DOMContentLoaded', () => { tryRender(); attachHandlers(); });
     </script>
   </body>
   </html>
-
