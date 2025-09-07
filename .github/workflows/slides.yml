@@ -1,0 +1,82 @@
+name: Build Majin Slides
+
+on:
+  workflow_dispatch:
+    inputs:
+      md_path:
+        description: "Markdown path to render"
+        required: true
+        default: "slides/sample.md"
+      title:
+        description: "Presentation title"
+        required: false
+        default: "Majin Slides"
+      folder_id:
+        description: "Google Drive Folder ID (optional)"
+        required: false
+        default: ""
+      share_email:
+        description: "Share with this email (writer) (optional)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "**/*.md"
+      - "slides/themes/**"
+      - ".github/workflows/slides.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      MD_PATH: ${{ inputs.md_path || '改良版 まじん式プロンプト.md' }}
+      TITLE: ${{ inputs.title || 'Majin Slides' }}
+      FOLDER_ID: ${{ inputs.folder_id }}
+      SHARE_EMAIL: ${{ inputs.share_email }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install fonts (optional but recommended)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk fonts-noto-color-emoji
+
+      - name: Install deps (marp-cli + googleapis)
+        run: |
+          npm -v
+          npm i -D @marp-team/marp-cli@latest
+          npm i googleapis@latest
+
+      - name: Render slides via Marp
+        run: |
+          mkdir -p dist
+          npx marp --version
+          # PDF / PPTX / HTML
+          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --pdf --output dist/slides.pdf
+          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --pptx --output dist/slides.pptx
+          npx marp "$MD_PATH" --theme-set slides/themes/majin.css --allow-local-files --html --output dist/slides.html
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: majin-slides
+          path: dist/
+
+      - name: Upload PPTX to Google Slides (convert)
+        id: upload
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_FOLDER_ID: ${{ env.FOLDER_ID }}
+          GDRIVE_SHARE_EMAIL: ${{ env.SHARE_EMAIL }}
+        run: |
+          node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$TITLE"
+
+      - name: Summary
+        run: |
+          echo "Slides URL: $(cat .gslides-url)" >> $GITHUB_STEP_SUMMARY

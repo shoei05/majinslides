@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Majin Marp Editor</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="left">
+        <button id="btn-new">新規</button>
+        <button id="btn-open">開く(.md)</button>
+        <button id="btn-save-md">保存(.md)</button>
+        <button id="btn-download-html">ダウンロード(.html)</button>
+      </div>
+      <div class="right">
+        <button id="btn-dispatch">Googleスライド化(ワンクリック)</button>
+        <button id="btn-settings">設定</button>
+      </div>
+      <input id="file-open" type="file" accept=".md,.markdown,.txt" hidden />
+    </header>
+
+    <main class="split">
+      <section class="pane editor-pane">
+        <textarea id="editor" spellcheck="false"></textarea>
+      </section>
+      <section class="pane preview-pane">
+        <div id="preview" class="preview"></div>
+      </section>
+    </main>
+
+    <dialog id="dlg-settings">
+      <form method="dialog" class="settings-form">
+        <h3>GitHub / Googleスライド 連携設定</h3>
+        <label>GitHub Owner<input id="gh-owner" placeholder="your-account-or-org" /></label>
+        <label>GitHub Repo<input id="gh-repo" placeholder="your-repo" /></label>
+        <label>ブランチ(ref)<input id="gh-ref" placeholder="main" /></label>
+        <label>Workflow ファイル名<input id="gh-workflow" placeholder="slides.yml" /></label>
+        <label>保存パス(.md)<input id="gh-md-path" placeholder="slides/majin-${timestamp}.md" /></label>
+        <label>GitHub PAT(Token)<input id="gh-token" type="password" placeholder="ghp_... (repo権限)" /></label>
+        <hr />
+        <label>Google Drive Folder ID(任意)<input id="gdrive-folder" placeholder="フォルダに入れる場合" /></label>
+        <label>共有メール(任意・編集者付与)<input id="share-email" placeholder="you@example.com" /></label>
+        <menu>
+          <button id="btn-settings-cancel">閉じる</button>
+          <button id="btn-settings-save" value="default">保存</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <!-- Marp Core (browser ESM) -->
+    <script type="module">
+      import Marp from 'https://cdn.jsdelivr.net/npm/@marp-team/marp-core@4.0.2/lib/marp.esm.js';
+
+      const $ = (sel) => document.querySelector(sel);
+      const editor = $('#editor');
+      const preview = $('#preview');
+
+      const DEFAULT_MD = `---\nmarp: true\ntheme: majin\npaginate: true\nsize: 16:9\n---\n\n# まじん式スライド\n\n- 左で編集 / 右でプレビュー\n- 「ダウンロード(.html)」で単一HTMLを書き出し\n- 「Googleスライド化」ボタンでGitHub Actionsを起動\n\n---\n\n## セクション\n\n- 箇条書き\n- 図や表現はお好みで\n`;
+
+      // Load theme CSS
+      let themeCSS = '';
+      fetch('./themes/majin.css').then(r => r.text()).then(css => { themeCSS = css; render(); });
+
+      const marp = new Marp({ html: true, markdown: { breaks: true } });
+      const themeSet = [
+        { name: 'majin', css: () => themeCSS },
+      ];
+
+      function render() {
+        const md = editor.value || '';
+        try {
+          const { html, css } = marp.render(md, { themeSet });
+          preview.innerHTML = `<style>${css}</style>` + html;
+        } catch (e) {
+          preview.innerHTML = `<pre class="error">${e.message}</pre>`;
+        }
+      }
+
+      // Persistence
+      const LS_KEY = 'majin-marp-md';
+      editor.value = localStorage.getItem(LS_KEY) || DEFAULT_MD;
+      editor.addEventListener('input', () => {
+        localStorage.setItem(LS_KEY, editor.value);
+        render();
+      });
+
+      // Buttons
+      $('#btn-new').addEventListener('click', () => { editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); });
+      $('#btn-open').addEventListener('click', () => $('#file-open').click());
+      $('#file-open').addEventListener('change', async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const text = await f.text();
+        editor.value = text;
+        editor.dispatchEvent(new Event('input'));
+      });
+      $('#btn-save-md').addEventListener('click', () => {
+        const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'majin-slides.md';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+      $('#btn-download-html').addEventListener('click', () => {
+        const { html, css } = marp.render(editor.value, { themeSet });
+        const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`;
+        const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'majin-slides.html';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      // Settings dialog
+      const dlg = $('#dlg-settings');
+      function readCfg() {
+        return {
+          owner: localStorage.getItem('gh.owner') || '',
+          repo: localStorage.getItem('gh.repo') || '',
+          ref: localStorage.getItem('gh.ref') || 'main',
+          workflow: localStorage.getItem('gh.workflow') || 'slides.yml',
+          mdPath: localStorage.getItem('gh.mdPath') || 'slides/majin-${timestamp}.md',
+          token: localStorage.getItem('gh.token') || '',
+          folderId: localStorage.getItem('gdrive.folderId') || '',
+          shareEmail: localStorage.getItem('gdrive.shareEmail') || '',
+        };
+      }
+      function writeCfg(cfg) {
+        localStorage.setItem('gh.owner', cfg.owner);
+        localStorage.setItem('gh.repo', cfg.repo);
+        localStorage.setItem('gh.ref', cfg.ref);
+        localStorage.setItem('gh.workflow', cfg.workflow);
+        localStorage.setItem('gh.mdPath', cfg.mdPath);
+        localStorage.setItem('gh.token', cfg.token);
+        localStorage.setItem('gdrive.folderId', cfg.folderId);
+        localStorage.setItem('gdrive.shareEmail', cfg.shareEmail);
+      }
+
+      function openSettings() {
+        const c = readCfg();
+        $('#gh-owner').value = c.owner;
+        $('#gh-repo').value = c.repo;
+        $('#gh-ref').value = c.ref;
+        $('#gh-workflow').value = c.workflow;
+        $('#gh-md-path').value = c.mdPath;
+        $('#gh-token').value = c.token;
+        $('#gdrive-folder').value = c.folderId;
+        $('#share-email').value = c.shareEmail;
+        dlg.showModal();
+      }
+      function saveSettings() {
+        writeCfg({
+          owner: $('#gh-owner').value.trim(),
+          repo: $('#gh-repo').value.trim(),
+          ref: $('#gh-ref').value.trim() || 'main',
+          workflow: $('#gh-workflow').value.trim() || 'slides.yml',
+          mdPath: $('#gh-md-path').value.trim() || 'slides/majin-${timestamp}.md',
+          token: $('#gh-token').value.trim(),
+          folderId: $('#gdrive-folder').value.trim(),
+          shareEmail: $('#share-email').value.trim(),
+        });
+        dlg.close();
+      }
+
+      $('#btn-settings').addEventListener('click', openSettings);
+      $('#btn-settings-cancel').addEventListener('click', () => dlg.close());
+      $('#btn-settings-save').addEventListener('click', saveSettings);
+
+      // Dispatch GH Action to build + upload to Google Slides
+      async function dispatchWorkflow() {
+        const cfg = readCfg();
+        if (!cfg.owner || !cfg.repo || !cfg.token) {
+          openSettings();
+          alert('GitHub設定が不足しています。Owner/Repo/Tokenを設定してください。');
+          return;
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const mdPath = (cfg.mdPath || 'slides/majin-${timestamp}.md').replace('${timestamp}', timestamp);
+        const contentB64 = btoa(unescape(encodeURIComponent(editor.value)));
+        const api = 'https://api.github.com';
+        const headers = { 'Authorization': `Bearer ${cfg.token}`, 'Accept': 'application/vnd.github+json' };
+
+        // 1) create or update file on branch
+        const putUrl = `${api}/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(mdPath)}`;
+        const resPut = await fetch(putUrl, {
+          method: 'PUT', headers,
+          body: JSON.stringify({ message: `feat(slides): add ${mdPath}`, content: contentB64, branch: cfg.ref })
+        });
+        if (!resPut.ok) {
+          const t = await resPut.text();
+          alert('ファイル登録失敗: ' + t);
+          return;
+        }
+
+        // 2) dispatch workflow
+        const wf = cfg.workflow;
+        const wfUrl = `${api}/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${encodeURIComponent(wf)}/dispatches`;
+        const payload = {
+          ref: cfg.ref,
+          inputs: {
+            md_path: mdPath,
+            title: `Majin Slides ${timestamp}`,
+            folder_id: cfg.folderId,
+            share_email: cfg.shareEmail,
+          }
+        };
+        const resWf = await fetch(wfUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+        if (!resWf.ok) {
+          const t = await resWf.text();
+          alert('Workflow起動失敗: ' + t);
+          return;
+        }
+        alert('Workflowを起動しました。完了するとリポジトリのActionsページに結果URLが表示されます。');
+      }
+
+      $('#btn-dispatch').addEventListener('click', () => dispatchWorkflow());
+
+      // Initial render
+      render();
+    </script>
+  </body>
+  </html>
+

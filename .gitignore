@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Node / tooling
+node_modules/
+dist/
+.gslides-url
+
+# Media (keep repo small)
+*.mp4
+*.mp3
+*.mov
+*.avi
+*.mkv
+*.wav
+*.aiff
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+

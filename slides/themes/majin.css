@@ -1,0 +1,64 @@
+/* Majin-style Marp theme (light-on-dark) */
+@charset "UTF-8";
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+
+/* Theme metadata for Marp */
+/*
+ * @theme majin
+ * @author codex
+ */
+
+section {
+  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+  background: #0e1117;
+  color: #e6e9ef;
+}
+
+/* Title slide */
+section h1 { font-weight: 900; letter-spacing: .5px; }
+section h1 strong { color: #79c0ff; }
+
+/* Accent rules */
+:root {
+  --accent: #79c0ff;
+  --accent-2: #3fbfbf;
+}
+
+section a { color: var(--accent); }
+
+/* Pagination */
+section::after {
+  color: #9aa4b2;
+}
+
+/* Code */
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+pre {
+  background: #0a0d12;
+  color: #e6e9ef;
+  border: 1px solid #1b2330;
+}
+
+/* Lists */
+section li { margin: .25em 0; }
+section strong { color: var(--accent); }
+
+/* Two-column helper */
+.columns {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+}
+
+/* Quote */
+blockquote {
+  border-left: 4px solid var(--accent-2);
+  padding-left: 12px; color: #aab4c0;
+}
+
+/* Table */
+table { border-collapse: collapse; }
+th, td { border: 1px solid #344055; padding: 6px 10px; }
+th { background: #121720; }
+
