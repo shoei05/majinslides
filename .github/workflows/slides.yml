@@ -1,24 +1,7 @@
 name: Build Majin Slides
 
 on:
-  workflow_dispatch:
-    inputs:
-      md_path:
-        description: "Markdown path to render"
-        required: true
-        default: "slides/sample.md"
-      title:
-        description: "Presentation title"
-        required: false
-        default: "Majin Slides"
-      folder_id:
-        description: "Google Drive Folder ID (optional)"
-        required: false
-        default: ""
-      share_email:
-        description: "Share with this email (writer) (optional)"
-        required: false
-        default: ""
+  workflow_dispatch: {}
   push:
     paths:
       - "**/*.md"
@@ -49,14 +32,10 @@ jobs:
           npm i googleapis@latest
 
       - name: Render slides via Marp
-        env:
-          MD_PATH: ${{ github.event.inputs.md_path }}
-          TITLE: ${{ github.event.inputs.title }}
         run: |
           set -euxo pipefail
-          MD=${MD_PATH:-}
-          if [ -z "$MD" ]; then MD="slides/sample.md"; fi
-          T=${TITLE:-"Majin Slides"}
+          MD="slides/sample.md"
+          T="Majin Slides"
           echo "Using MD_PATH=$MD\nUsing TITLE=$T"
           test -f "$MD" || (echo "Markdown not found: $MD"; git ls-files; exit 1)
           ls -la slides/themes || true
@@ -78,9 +57,9 @@ jobs:
         if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GDRIVE_FOLDER_ID: ${{ github.event.inputs.folder_id }}
-          GDRIVE_SHARE_EMAIL: ${{ github.event.inputs.share_email }}
-          TITLE: ${{ github.event.inputs.title }}
+          GDRIVE_FOLDER_ID: ""
+          GDRIVE_SHARE_EMAIL: ""
+          TITLE: "Majin Slides"
         run: |
           T=${TITLE:-"Majin Slides"}
           node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$T"
