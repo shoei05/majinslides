@@ -40,7 +40,10 @@ jobs:
       - name: Render slides via Marp
         run: |
           set -euxo pipefail
-          MD="slides/sample.md"
+          # Prefer the root file if present, otherwise fallback to sample
+          PREF="改良版  まじん式プロンプト.md"
+          ALT="改良版 まじん式プロンプト.md"
+          if [ -f "$PREF" ]; then MD="$PREF"; elif [ -f "$ALT" ]; then MD="$ALT"; else MD="slides/sample.md"; fi
           T="Majin Slides"
           echo "Using MD_PATH=$MD\nUsing TITLE=$T"
           test -f "$MD" || (echo "Markdown not found: $MD"; git ls-files; exit 1)

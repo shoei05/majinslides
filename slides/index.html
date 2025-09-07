@@ -122,11 +122,11 @@
       const dlg = $('#dlg-settings');
       function readCfg() {
         return {
-          owner: localStorage.getItem('gh.owner') || '',
-          repo: localStorage.getItem('gh.repo') || '',
+          owner: localStorage.getItem('gh.owner') || 'shoei05',
+          repo: localStorage.getItem('gh.repo') || 'majinslides',
           ref: localStorage.getItem('gh.ref') || 'main',
           workflow: localStorage.getItem('gh.workflow') || 'slides.yml',
-          mdPath: localStorage.getItem('gh.mdPath') || 'slides/majin-${timestamp}.md',
+          mdPath: localStorage.getItem('gh.mdPath') || '改良版 まじん式プロンプト.md',
           token: localStorage.getItem('gh.token') || '',
           folderId: localStorage.getItem('gdrive.folderId') || '',
           shareEmail: localStorage.getItem('gdrive.shareEmail') || '',
@@ -227,4 +227,3 @@
     </script>
   </body>
   </html>
-
