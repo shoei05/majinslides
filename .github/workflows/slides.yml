@@ -70,6 +70,7 @@ jobs:
 
       - name: Upload PPTX to Google Slides (convert)
         id: upload
+        if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GDRIVE_FOLDER_ID: ${{ env.FOLDER_ID }}
@@ -79,4 +80,8 @@ jobs:
 
       - name: Summary
         run: |
-          echo "Slides URL: $(cat .gslides-url)" >> $GITHUB_STEP_SUMMARY
+          if [ -f .gslides-url ]; then
+            echo "Slides URL: $(cat .gslides-url)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Google Slides conversion skipped (no secret)." >> $GITHUB_STEP_SUMMARY
+          fi
