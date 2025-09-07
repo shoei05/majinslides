@@ -13,16 +13,16 @@
   <body>
     <header class="toolbar">
       <div class="left">
-        <button id="btn-new">新規</button>
-        <button id="btn-open">開く(.md)</button>
-        <button id="btn-save-md">保存(.md)</button>
-        <button id="btn-download-html">ダウンロード(.html)</button>
+        <button id="btn-new" onclick="window.__newDoc && window.__newDoc()">新規</button>
+        <button id="btn-open" onclick="window.__openFile && window.__openFile()">開く(.md)</button>
+        <button id="btn-save-md" onclick="window.__saveMd && window.__saveMd()">保存(.md)</button>
+        <button id="btn-download-html" onclick="window.__saveHtml && window.__saveHtml()">ダウンロード(.html)</button>
       </div>
       <div class="right">
-        <button id="btn-dispatch">Googleスライド化(ワンクリック)</button>
-        <button id="btn-google-auth">Googleにサインイン</button>
-        <button id="btn-direct-gslides">Secrets不要で直送</button>
-        <button id="btn-settings">設定</button>
+        <button id="btn-dispatch" onclick="window.__dispatch && window.__dispatch()">Googleスライド化(ワンクリック)</button>
+        <button id="btn-google-auth" onclick="window.__authGoogle && window.__authGoogle()">Googleにサインイン</button>
+        <button id="btn-direct-gslides" onclick="window.__direct && window.__direct()">Secrets不要で直送</button>
+        <button id="btn-settings" onclick="window.__openSettings && window.__openSettings()">設定</button>
       </div>
       <input id="file-open" type="file" accept=".md,.markdown,.txt" hidden />
     </header>
@@ -273,6 +273,16 @@
         const bDispatch = $('#btn-dispatch'); if (bDispatch) bDispatch.addEventListener('click', () => dispatchWorkflow());
         const bAuth = $('#btn-google-auth'); if (bAuth) bAuth.addEventListener('click', () => ensureGoogleToken(true));
         const bDirect = $('#btn-direct-gslides'); if (bDirect) bDirect.addEventListener('click', () => dispatchAndDirectConvert());
+
+        // expose fallbacks for inline onclick
+        window.__newDoc = () => { if (!editor) return; editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); };
+        window.__openFile = () => { const fo = $('#file-open'); if (fo) fo.click(); };
+        window.__saveMd = () => { const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.md'; a.click(); URL.revokeObjectURL(a.href); };
+        window.__saveHtml = () => { const { html, css } = marp.render(editor.value, { themeSet }); const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`; const blob = new Blob([doc], { type: 'text/html;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'majin-slides.html'; a.click(); URL.revokeObjectURL(a.href); };
+        window.__openSettings = openSettings;
+        window.__dispatch = () => dispatchWorkflow();
+        window.__authGoogle = () => ensureGoogleToken(true);
+        window.__direct = () => dispatchAndDirectConvert();
       }
 
       window.addEventListener('DOMContentLoaded', () => { tryRender(); attachHandlers(); });
