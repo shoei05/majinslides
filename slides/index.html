@@ -19,6 +19,8 @@
       </div>
       <div class="right">
         <button id="btn-dispatch">Googleスライド化(ワンクリック)</button>
+        <button id="btn-google-auth">Googleにサインイン</button>
+        <button id="btn-direct-gslides">Secrets不要で直送</button>
         <button id="btn-settings">設定</button>
       </div>
       <input id="file-open" type="file" accept=".md,.markdown,.txt" hidden />
@@ -43,6 +45,7 @@
         <label>保存パス(.md)<input id="gh-md-path" placeholder="slides/majin-${timestamp}.md" /></label>
         <label>GitHub PAT(Token)<input id="gh-token" type="password" placeholder="ghp_... (repo権限)" /></label>
         <hr />
+        <label>Google OAuth Client ID<input id="gcp-client-id" placeholder="xxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com" /></label>
         <label>Google Drive Folder ID(任意)<input id="gdrive-folder" placeholder="フォルダに入れる場合" /></label>
         <label>共有メール(任意・編集者付与)<input id="share-email" placeholder="you@example.com" /></label>
         <menu>
@@ -53,6 +56,8 @@
     </dialog>
 
     <!-- Marp Core (browser ESM) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script type="module">
       import Marp from 'https://cdn.jsdelivr.net/npm/@marp-team/marp-core@4.0.2/lib/marp.esm.js';
 
@@ -64,7 +69,10 @@
 
       // Load theme CSS
       let themeCSS = '';
-      fetch('./themes/majin.css').then(r => r.text()).then(css => { themeCSS = css; render(); });
+      fetch('./themes/majin.css')
+        .then(r => { if (!r.ok) throw new Error('theme load failed'); return r.text(); })
+        .then(css => { themeCSS = css; render(); })
+        .catch(e => { console.error(e); });
 
       const marp = new Marp({ html: true, markdown: { breaks: true } });
       const themeSet = [
@@ -89,34 +97,39 @@
         render();
       });
 
-      // Buttons
-      $('#btn-new').addEventListener('click', () => { editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); });
-      $('#btn-open').addEventListener('click', () => $('#file-open').click());
-      $('#file-open').addEventListener('change', async (e) => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        const text = await f.text();
-        editor.value = text;
-        editor.dispatchEvent(new Event('input'));
-      });
-      $('#btn-save-md').addEventListener('click', () => {
-        const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'majin-slides.md';
-        a.click();
-        URL.revokeObjectURL(a.href);
-      });
-      $('#btn-download-html').addEventListener('click', () => {
-        const { html, css } = marp.render(editor.value, { themeSet });
-        const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`;
-        const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'majin-slides.html';
-        a.click();
-        URL.revokeObjectURL(a.href);
-      });
+      // Buttons (attach after DOMContentLoaded for確実性)
+      function attachHandlers() {
+        $('#btn-new')?.addEventListener('click', () => { editor.value = DEFAULT_MD; editor.dispatchEvent(new Event('input')); });
+        $('#btn-open')?.addEventListener('click', () => $('#file-open').click());
+        $('#file-open')?.addEventListener('change', async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          const text = await f.text();
+          editor.value = text;
+          editor.dispatchEvent(new Event('input'));
+        });
+        $('#btn-save-md')?.addEventListener('click', () => {
+          const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'majin-slides.md';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+        $('#btn-download-html')?.addEventListener('click', () => {
+          const { html, css } = marp.render(editor.value, { themeSet });
+          const doc = `<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Majin Slides</title><style>${css}</style>${html}`;
+          const blob = new Blob([doc], { type: 'text/html;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'majin-slides.html';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+        $('#btn-dispatch')?.addEventListener('click', () => dispatchWorkflow());
+        $('#btn-google-auth')?.addEventListener('click', () => ensureGoogleToken(true));
+        $('#btn-direct-gslides')?.addEventListener('click', () => dispatchAndDirectConvert());
+      }
 
       // Settings dialog
       const dlg = $('#dlg-settings');
@@ -169,9 +182,9 @@
         dlg.close();
       }
 
-      $('#btn-settings').addEventListener('click', openSettings);
-      $('#btn-settings-cancel').addEventListener('click', () => dlg.close());
-      $('#btn-settings-save').addEventListener('click', saveSettings);
+      $('#btn-settings')?.addEventListener('click', openSettings);
+      $('#btn-settings-cancel')?.addEventListener('click', () => dlg.close());
+      $('#btn-settings-save')?.addEventListener('click', saveSettings);
 
       // Dispatch GH Action to build + upload to Google Slides
       async function dispatchWorkflow() {
@@ -220,10 +233,133 @@
         alert('Workflowを起動しました。完了するとリポジトリのActionsページに結果URLが表示されます。');
       }
 
-      $('#btn-dispatch').addEventListener('click', () => dispatchWorkflow());
+      // Google OAuth (client-side, no Secrets)
+      let googleAccessToken = '';
+      async function ensureGoogleToken(interactive=false) {
+        const cfg = readCfg();
+        if (!cfg.googleClientId) { openSettings(); alert('Google OAuth Client ID を設定してください'); return null; }
+        if (googleAccessToken && !interactive) return googleAccessToken;
+        return new Promise((resolve, reject) => {
+          try {
+            /* global google */
+            const tokenClient = google.accounts.oauth2.initTokenClient({
+              client_id: cfg.googleClientId,
+              scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/presentations',
+              callback: (resp) => {
+                if (resp && resp.access_token) { googleAccessToken = resp.access_token; resolve(googleAccessToken); }
+                else reject(new Error('No access_token'));
+              },
+            });
+            tokenClient.requestAccessToken();
+          } catch (e) { console.error(e); alert('Google認証に失敗しました'); reject(e); }
+        });
+      }
 
-      // Initial render
-      render();
+      async function fetchJson(url, headers) {
+        const r = await fetch(url, { headers });
+        if (!r.ok) throw new Error(`${r.status} ${url}`);
+        return r.json();
+      }
+
+      async function dispatchAndDirectConvert() {
+        // 1) Commit & dispatch
+        const start = Date.now();
+        const cfg = readCfg();
+        if (!cfg.owner || !cfg.repo || !cfg.token) { openSettings(); alert('GitHub設定が不足しています'); return; }
+        const mdPath = await commitMarkdown(cfg);
+        await triggerWorkflow(cfg, mdPath);
+        // 2) Wait for success and get PPTX artifact
+        const { blob, name } = await waitAndFetchPptxArtifact(cfg, start);
+        // 3) Google auth and upload(convert)
+        const token = await ensureGoogleToken(true);
+        const url = await uploadPptxAsSlides(token, blob, cfg.folderId || '', `Majin Slides ${new Date().toLocaleString()}`);
+        if (cfg.shareEmail) { try { await grantPermission(token, url.id, cfg.shareEmail); } catch (e) { console.warn('share failed', e); } }
+        alert(`Googleスライドを作成しました: ${url.webLink}`);
+        window.open(url.webLink, '_blank');
+      }
+
+      async function commitMarkdown(cfg) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const mdPath = (cfg.mdPath || 'slides/majin-${timestamp}.md').replace('${timestamp}', timestamp);
+        const contentB64 = btoa(unescape(encodeURIComponent(editor.value)));
+        const api = 'https://api.github.com';
+        const headers = { 'Authorization': `Bearer ${cfg.token}`, 'Accept': 'application/vnd.github+json' };
+        const putUrl = `${api}/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(mdPath)}`;
+        const resPut = await fetch(putUrl, { method: 'PUT', headers, body: JSON.stringify({ message: `feat(slides): add ${mdPath}`, content: contentB64, branch: cfg.ref }) });
+        if (!resPut.ok) { const t = await resPut.text(); throw new Error('ファイル登録失敗: ' + t); }
+        return mdPath;
+      }
+
+      async function triggerWorkflow(cfg, mdPath) {
+        const api = 'https://api.github.com';
+        const headers = { 'Authorization': `Bearer ${cfg.token}`, 'Accept': 'application/vnd.github+json' };
+        const wfUrl = `${api}/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${encodeURIComponent(cfg.workflow)}/dispatches`;
+        const payload = { ref: cfg.ref };
+        const resWf = await fetch(wfUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+        if (!resWf.ok) { const t = await resWf.text(); throw new Error('Workflow起動失敗: ' + t); }
+      }
+
+      async function waitAndFetchPptxArtifact(cfg, startedAtMs, timeoutMs=180000) {
+        const api = 'https://api.github.com';
+        const headers = { 'Authorization': `Bearer ${cfg.token}`, 'Accept': 'application/vnd.github+json' };
+        const deadline = Date.now() + timeoutMs;
+        const sinceIso = new Date(startedAtMs - 5000).toISOString();
+        while (Date.now() < deadline) {
+          // List recent successful runs for this workflow
+          const runs = await fetchJson(`${api}/repos/${cfg.owner}/${cfg.repo}/actions/runs?per_page=10`, headers);
+          const ok = runs.workflow_runs?.find(r => r.path === `.github/workflows/${cfg.workflow}` && r.status === 'completed' && r.conclusion === 'success' && r.run_started_at >= sinceIso);
+          if (ok) {
+            const arts = await fetchJson(`${api}/repos/${cfg.owner}/${cfg.repo}/actions/runs/${ok.id}/artifacts?per_page=10`, headers);
+            const a = arts.artifacts?.find(x => x.name === 'majin-slides');
+            if (a) {
+              const zipRes = await fetch(a.archive_download_url, { headers });
+              const zipBlob = await zipRes.blob();
+              const zip = await JSZip.loadAsync(zipBlob);
+              // Find dist/slides.pptx
+              const fileEntry = Object.values(zip.files).find(f => f.name.endsWith('dist/slides.pptx'));
+              if (!fileEntry) throw new Error('PPTXがアーティファクトに見つかりません');
+              const arrbuf = await fileEntry.async('arraybuffer');
+              return { blob: new Blob([arrbuf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' }), name: 'slides.pptx' };
+            }
+          }
+          await new Promise(r => setTimeout(r, 4000));
+        }
+        throw new Error('Artifactsの取得にタイムアウトしました');
+      }
+
+      async function uploadPptxAsSlides(accessToken, pptxBlob, folderId, title) {
+        const boundary = '-------majinslides' + Math.random().toString(16).slice(2);
+        const metadata = { name: title, mimeType: 'application/vnd.google-apps.presentation', parents: folderId ? [folderId] : undefined };
+        const body = new Blob([
+          `--${boundary}\r\n`,
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n',
+          JSON.stringify(metadata) + '\r\n',
+          `--${boundary}\r\n`,
+          'Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation\r\n\r\n',
+          pptxBlob,
+          `\r\n--${boundary}--`
+        ], { type: 'multipart/related; boundary=' + boundary });
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          body,
+        });
+        if (!res.ok) throw new Error('Driveアップロード失敗: ' + (await res.text()));
+        const { id } = await res.json();
+        return { id, webLink: `https://docs.google.com/presentation/d/${id}/edit` };
+      }
+
+      async function grantPermission(accessToken, fileId, email) {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?sendNotificationEmail=false`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email })
+        });
+        if (!res.ok) throw new Error('権限付与失敗: ' + (await res.text()));
+      }
+
+      // Initial render and handlers
+      window.addEventListener('DOMContentLoaded', () => { render(); attachHandlers(); });
     </script>
   </body>
   </html>
