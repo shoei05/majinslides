@@ -28,12 +28,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # workflow_dispatch のときのみ値が入り、push では空文字になる
-      MD_PATH: ${{ github.event.inputs.md_path }}
-      TITLE: ${{ github.event.inputs.title }}
-      FOLDER_ID: ${{ github.event.inputs.folder_id }}
-      SHARE_EMAIL: ${{ github.event.inputs.share_email }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,6 +49,9 @@ jobs:
           npm i googleapis@latest
 
       - name: Render slides via Marp
+        env:
+          MD_PATH: ${{ github.event.inputs.md_path }}
+          TITLE: ${{ github.event.inputs.title }}
         run: |
           set -euxo pipefail
           MD=${MD_PATH:-}
@@ -81,8 +78,9 @@ jobs:
         if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GDRIVE_FOLDER_ID: ${{ env.FOLDER_ID }}
-          GDRIVE_SHARE_EMAIL: ${{ env.SHARE_EMAIL }}
+          GDRIVE_FOLDER_ID: ${{ github.event.inputs.folder_id }}
+          GDRIVE_SHARE_EMAIL: ${{ github.event.inputs.share_email }}
+          TITLE: ${{ github.event.inputs.title }}
         run: |
           T=${TITLE:-"Majin Slides"}
           node ./scripts/upload-to-gslides.mjs ./dist/slides.pptx "$T"
