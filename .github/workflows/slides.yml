@@ -55,6 +55,10 @@ jobs:
 
       - name: Render slides via Marp
         run: |
+          set -euxo pipefail
+          echo "Using MD_PATH=$MD_PATH"
+          test -f "$MD_PATH" || (echo "Markdown not found: $MD_PATH"; ls -la; exit 1)
+          ls -la slides/themes || true
           mkdir -p dist
           npx marp --version
           # PDF / PPTX / HTML
